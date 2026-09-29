@@ -7,6 +7,8 @@ name: API compatibility
 
 permissions:
   contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   openapi-diff:
@@ -64,3 +66,48 @@ jobs:
           cat oasdiff-breaking.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo '</details>' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish report on the pull request
+        if: always() && github.event_name == 'pull_request' && steps.compatibility.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RESULT: ${{ steps.compatibility.outputs.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          if [ "$RESULT" = "pass" ]; then
+            heading="✅ API compatibility passed"
+            explanation="No breaking changes detected."
+          else
+            heading="❌ API compatibility failed"
+            explanation="Breaking changes were detected, or the comparison could not complete."
+          fi
+
+          {
+            echo '<!-- api-compatibility-report -->'
+            echo "## $heading"
+            echo
+            echo "$explanation"
+            echo
+            echo '[View the full check run]('$RUN_URL')'
+            echo
+            echo '<details>'
+            echo '<summary>oasdiff report</summary>'
+            echo
+            echo '```text'
+            cat oasdiff-breaking.txt
+            echo '```'
+            echo '</details>'
+          } > pr-comment.md
+
+          comments=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate)
+          existing_comment=$(jq -r '[.[][] | select(.body | contains("<!-- api-compatibility-report -->"))][0].id // empty' <<< "$comments")
+
+          if [ -n "$existing_comment" ]; then
+            gh api "repos/$GH_REPO/issues/comments/$existing_comment" \
+              --method PATCH -f body="$(cat pr-comment.md)"
+          else
+            gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body-file pr-comment.md
+          fi
