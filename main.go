@@ -11,12 +11,13 @@ import (
 )
 
 type GreetingInput struct {
-	Name string `query:"name" doc:"Name to greet"`
+	Name          string `query:"name" doc:"Name to greet"`
+	ClientVersion string `header:"X-Client-Version" doc:"Client version" required:"true"`
 }
 
 type GreetingOutput struct {
 	Body struct {
-		Message string `json:"message"`
+		Message string `json:"message" doc:"Greeting message" required:"false"`
 	}
 }
 
