@@ -17,6 +17,8 @@ Run the API with `go run .` (listens on `:8888`) or print its generated OpenAPI 
 
 The script generates the current spec from Huma and runs `oasdiff breaking` against the baseline. If `oasdiff` is already installed, it uses that; otherwise it runs the pinned `v1.20.0` release through `go run` (which needs network access the first time). A breaking change exits non-zero. To compare against another baseline, pass its path as the first argument.
 
+The GitHub Actions workflow at `.github/workflows/api-compatibility.yml` runs this check on pull requests and pushes to `main`. It publishes the `oasdiff` output in the Actions run summary and fails the check when breaking changes are found. Keep this check required in branch protection if it should block merges.
+
 When an API change is intentional, review the generated spec before updating the baseline:
 
 ```sh

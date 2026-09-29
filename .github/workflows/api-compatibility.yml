@@ -1,0 +1,66 @@
+name: API compatibility
+
+'on':
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  openapi-diff:
+    name: OpenAPI breaking changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Set up Go toolchain for oasdiff
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+
+      - name: Install oasdiff
+        run: go install github.com/oasdiff/oasdiff@v1.20.0
+
+      - name: Compare OpenAPI contracts
+        id: compatibility
+        shell: bash
+        run: |
+          set +e
+          ./scripts/check-breaking.sh 2>&1 | tee oasdiff-breaking.txt
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "result=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=fail" >> "$GITHUB_OUTPUT"
+          fi
+
+          exit "$status"
+
+      - name: Publish API compatibility report
+        if: always() && steps.compatibility.outcome != 'skipped'
+        env:
+          RESULT: ${{ steps.compatibility.outputs.result }}
+        run: |
+          if [ "$RESULT" = "pass" ]; then
+            echo "## ✅ API compatibility" >> "$GITHUB_STEP_SUMMARY"
+            echo "No breaking changes detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ❌ API compatibility" >> "$GITHUB_STEP_SUMMARY"
+            echo "Breaking changes were detected, or the comparison could not complete. See the check log below." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '<details><summary>oasdiff report</summary>' >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat oasdiff-breaking.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '</details>' >> "$GITHUB_STEP_SUMMARY"

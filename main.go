@@ -16,7 +16,7 @@ type GreetingInput struct {
 
 type GreetingOutput struct {
 	Body struct {
-		Message string `json:"message"`
+		Message string `json:"message" doc:"Greeting message" required:"false"`
 	}
 }
 
